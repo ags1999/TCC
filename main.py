@@ -12,7 +12,7 @@ def load_environment_variables():
         load_dotenv()
         
         # Retrieve specific environment variables
-        api_token = os.getenv("API_TOKEN")
+        api_token = os.getenv("TELEGRAM_API_TOKEN")
         
         # Validate critical variables
         if not all([api_token]):
@@ -20,7 +20,7 @@ def load_environment_variables():
         
 
         return {
-            "API_TOKEN": api_token
+            "TELEGRAM_API_TOKEN": api_token
         }
     
     except Exception as e:
@@ -40,7 +40,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     config = load_environment_variables()
-    api_token = config["API_TOKEN"]
+    api_token = config["TELEGRAM_API_TOKEN"]
     application = ApplicationBuilder().token(api_token).build()
     
     start_handler = CommandHandler('start', start)

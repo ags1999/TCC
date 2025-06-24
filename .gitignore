@@ -6,3 +6,5 @@
 .env
 pyvenv.cfg
 *docx
+*pdf
+*png
