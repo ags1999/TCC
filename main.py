@@ -2,7 +2,7 @@ import asyncio
 from dotenv import load_dotenv
 import logging
 import os
-from telegram import Update
+import telegram
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
 
@@ -27,23 +27,32 @@ def load_environment_variables():
         print(f"Error loading environment variables: {e}")
         return None
 
+config = load_environment_variables()
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
+#async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
 
 
+async def main():
+    api_token = config["TELEGRAM_API_TOKEN"]
+    bot = telegram.Bot(api_token)
+    async with bot:
+        updates = (await bot.get_updates())[0]
+        print(updates)
+        await bot.send_message(text='Hi John!', chat_id=1895118626)
 
 
 if __name__ == '__main__':
-    config = load_environment_variables()
-    api_token = config["TELEGRAM_API_TOKEN"]
-    application = ApplicationBuilder().token(api_token).build()
+
+    asyncio.run(main())
+    #application = ApplicationBuilder().token(api_token).build()
     
-    start_handler = CommandHandler('start', start)
-    application.add_handler(start_handler)
+    #start_handler = CommandHandler('start', start)
+    #application.add_handler(start_handler)
     
-    application.run_polling()
+    #application.run_polling()
