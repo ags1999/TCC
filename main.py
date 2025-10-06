@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 import logging
 import os
 import telegram
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import llm
 
 
 def load_environment_variables():
@@ -28,31 +30,38 @@ def load_environment_variables():
         return None
 
 config = load_environment_variables()
+api_token = config["TELEGRAM_API_TOKEN"]
+
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-#async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
+#Commands
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
 
+#Responses
 
-async def main():
-    api_token = config["TELEGRAM_API_TOKEN"]
-    bot = telegram.Bot(api_token)
-    async with bot:
-        updates = (await bot.get_updates())[0]
-        print(updates)
-        await bot.send_message(text='Hi John!', chat_id=1895118626)
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message_type: str =update.message.chat.type
+    msg_text:str = update.message.text
+    llm.msg_processing(msg_text)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg_text)
+
 
 
 if __name__ == '__main__':
+    print("Starting bot...")
 
-    asyncio.run(main())
-    #application = ApplicationBuilder().token(api_token).build()
+    application = ApplicationBuilder().token(api_token).build()
     
-    #start_handler = CommandHandler('start', start)
-    #application.add_handler(start_handler)
-    
-    #application.run_polling()
+    start_handler = CommandHandler('start', start)
+    msg_handler = MessageHandler(filters.TEXT, handle_message)
+
+    application.add_handler(start_handler)
+    application.add_handler(msg_handler)
+
+    print("Polling...")
+    application.run_polling(poll_interval=3)
