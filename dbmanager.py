@@ -6,6 +6,26 @@ conn = psycopg2.connect("dbname=ledgerBotDB user=alexandre")
 # Open a cursor to perform database operations
 cur = conn.cursor()
 
+def register_user(id, name):
+    query = f'''SELECT EXISTS(
+    SELECT 1 
+    FROM users 
+    WHERE users.id = %s
+    )'''
+    cur.execute(query, (id,))
+        
+        # Fetch result
+    exists = cur.fetchone()[0]
+    if not exists:
+        insert = '''INSERT INTO users VALUES (%s, %s)'''
+        cur.execute(insert, (id, name))
+        conn.commit()
+    print(exists)
+
+def register_transaction():
+    pass
+
+'''
 # Execute a command: this creates a new table
 #cur.execute("CREATE TABLE test (id serial PRIMARY KEY, num integer, data varchar);")
 
@@ -25,3 +45,4 @@ print(cur.fetchall())
 # Close communication with the database
 cur.close()
 conn.close()
+'''

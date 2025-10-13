@@ -6,6 +6,7 @@ import telegram
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 import llm
+import dbmanager
 
 
 def load_environment_variables():
@@ -40,15 +41,21 @@ logging.basicConfig(
 
 #Commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
+    start_msg = "Olá, eu sou o LedgerBot, seu assistente financeiro inteligente!"
+    #await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=start_msg)
 
 #Responses
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.chat.id
+    user_name = update.message.chat.effective_name
+    dbmanager.register_user(user_id, user_name)
+    
     message_type: str =update.message.chat.type
     msg_text:str = update.message.text
-    llm.msg_processing(msg_text)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg_text)
+    response = llm.msg_processing(msg_text)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
 
 
