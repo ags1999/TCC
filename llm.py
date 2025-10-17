@@ -3,6 +3,16 @@ from google.genai import types
 import os
 from pydantic import BaseModel
 import json
+from enum import Enum
+
+class ExpenseCategory(Enum):
+    SERVICES = "Serviços"
+    TRAVEL = "Viagens"
+    GROCERIES = "Mercado"
+    RESTAURANTS = "Restaurantes"
+    BILLS = "Contas"
+    OTHER = "Outros"
+    
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 '''
@@ -22,7 +32,7 @@ response = chat.send_message("You are a financial assistant chatbot. Return foll
 
 class UserTransactions(BaseModel):
     value: int
-    description: str
+    description: ExpenseCategory
 
 
 
@@ -34,7 +44,7 @@ def msg_processing(msg: str):
     #prompt = "Extract the monetary value specified in the following message and convert to cents, returning 0 if no value specified. Also, include a short description, returning an empty string if nothing is provided: "
     prompt = '''Você é um chatbot assistente financeiro.O usuário enviou uma mensagem descrevendo uma transação. Analize a mensagem e forneça:
     1)O valor descrito na transação, em centavos, retornando 0 se nenhum valor foi descrito.
-    2)Uma descrição curta do objetivo da transação(máximo 255 caracteres). Retorne 'Despesa' se o usuário não descreveu a transação, enviando somente o valor.'''
+    2)A categoria da transação, retornando "Outros" caso não se encaixe em nenhuma alternativa'''
     prompt = prompt + msg
     response = client.models.generate_content(
     model="gemini-2.5-flash",
