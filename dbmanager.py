@@ -1,5 +1,5 @@
 import psycopg2
-
+import json
 # Connect to an existing database
 conn = psycopg2.connect("dbname=ledgerBotDB user=alexandre")
 

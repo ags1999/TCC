@@ -40,6 +40,22 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+keyboard = [
+    [
+        InlineKeyboardButton("Confirmar", callback_data="1"),
+
+    ],
+    [
+        InlineKeyboardButton("Editar", callback_data="2"),
+
+    ],
+    [
+        InlineKeyboardButton("Cancelar", callback_data="3"),
+    ],
+]
+
+reply_markup = InlineKeyboardMarkup(keyboard)
+
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Parses the CallbackQuery and updates the message text."""
     query = update.callback_query
@@ -48,7 +64,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
     await query.answer()
 
-    await query.edit_message_text(text=f"Selected option: {query.data}")
+    await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
 
 #Commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -63,21 +79,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.chat.effective_name
     dbmanager.register_user(user_id, user_name)
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Confirmar", callback_data="1"),
 
-        ],
-        [
-            InlineKeyboardButton("Editar", callback_data="2"),
-
-        ],
-        [
-            InlineKeyboardButton("Cancelar", callback_data="3"),
-        ],
-    ]
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     
     message_type: str =update.message.chat.type
