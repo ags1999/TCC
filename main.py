@@ -3,10 +3,11 @@ from dotenv import load_dotenv
 import logging
 import os
 import telegram
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 import llm
 import dbmanager
+import json
 
 
 def load_environment_variables():
@@ -39,6 +40,16 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Parses the CallbackQuery and updates the message text."""
+    query = update.callback_query
+
+    # CallbackQueries need to be answered, even if no notification to the user is needed
+    # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
+    await query.answer()
+
+    await query.edit_message_text(text=f"Selected option: {query.data}")
+
 #Commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start_msg = "Olá, eu sou o LedgerBot, seu assistente financeiro inteligente!"
@@ -51,11 +62,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat.id
     user_name = update.message.chat.effective_name
     dbmanager.register_user(user_id, user_name)
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Confirmar", callback_data="1"),
+
+        ],
+        [
+            InlineKeyboardButton("Editar", callback_data="2"),
+
+        ],
+        [
+            InlineKeyboardButton("Cancelar", callback_data="3"),
+        ],
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     
     message_type: str =update.message.chat.type
     msg_text:str = update.message.text
     response = llm.msg_processing(msg_text)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+    response = json.loads(response)
+    reply=f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
+    await update.message.reply_text(reply, reply_markup=reply_markup)
 
 
 
@@ -66,9 +96,11 @@ if __name__ == '__main__':
     
     start_handler = CommandHandler('start', start)
     msg_handler = MessageHandler(filters.TEXT, handle_message)
+    button_handler = CallbackQueryHandler(button)
 
     application.add_handler(start_handler)
     application.add_handler(msg_handler)
+    application.add_handler(button_handler)
 
     print("Polling...")
     application.run_polling(poll_interval=3)

@@ -32,7 +32,8 @@ response = chat.send_message("You are a financial assistant chatbot. Return foll
 
 class UserTransactions(BaseModel):
     value: int
-    description: ExpenseCategory
+    category: ExpenseCategory
+
 
 
 
