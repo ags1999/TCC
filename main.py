@@ -54,6 +54,34 @@ keyboard = [
     ],
 ]
 
+category_buttons = [
+    [
+        InlineKeyboardButton("Serviços", callback_data="Serviços"),
+
+    ],
+    [
+        InlineKeyboardButton("Viagens", callback_data="Viagens"),
+
+    ],
+    [
+        InlineKeyboardButton("Mercado", callback_data="Mercado"),
+    ],
+    [
+        InlineKeyboardButton("Restaurantes", callback_data="Restaurantes"),
+
+    ],
+    [
+        InlineKeyboardButton("Contas", callback_data="Contas"),
+
+    ],
+    [
+        InlineKeyboardButton("Outros", callback_data="Outros"),
+    ],
+]
+
+
+
+
 reply_markup = InlineKeyboardMarkup(keyboard)
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -70,7 +98,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await query.edit_message_text(text="Transação Confirmada")
 
         case "2":
-            pass
+            await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
         case "3":
             await query.edit_message_text(text="Transação Cancelada")
     #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
