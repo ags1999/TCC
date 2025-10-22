@@ -118,9 +118,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             pass
         case "Categoria":
             query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
-        case _:
+        case "Serviços"|"Viagens"|"Mercado"|"Restaurantes"|"Contas"|"Outros":
+            response["category"] = query.data
+            context.user_data["transaction"] = response
             reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
-            await update.message.reply_text(reply, reply_markup=reply_markup)
+            await update.message.reply_text(reply, reply_markup=reply_markup)    
+            
             
     #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
 
