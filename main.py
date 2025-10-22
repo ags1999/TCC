@@ -54,6 +54,18 @@ keyboard = [
     ],
 ]
 
+field_edit_buttons = [
+    [
+        InlineKeyboardButton("Valor", callback_data="Valor"),
+
+    ],
+    [
+        InlineKeyboardButton("Categoria", callback_data="Categoria"),
+
+    ],
+
+]
+
 category_buttons = [
     [
         InlineKeyboardButton("Serviços", callback_data="Serviços"),
@@ -88,6 +100,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Parses the CallbackQuery and updates the message text."""
     query = update.callback_query
 
+    response = context.user_data["transaction"]
     # CallbackQueries need to be answered, even if no notification to the user is needed
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
     await query.answer()
@@ -98,9 +111,17 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await query.edit_message_text(text="Transação Confirmada")
 
         case "2":
-            await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
+            await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(field_edit_buttons))
         case "3":
             await query.edit_message_text(text="Transação Cancelada")
+        case "Valor":
+            pass
+        case "Categoria":
+            query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
+        case _:
+            reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
+            await update.message.reply_text(reply, reply_markup=reply_markup)
+            
     #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
 
 # Commands
