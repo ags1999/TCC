@@ -1,4 +1,4 @@
-import asyncio
+# import asyncio
 from dotenv import load_dotenv
 import logging
 import os
@@ -22,7 +22,6 @@ def load_environment_variables():
         if not all([api_token]):
             raise ValueError("Missing critical environment variables")
         
-
         return {
             "TELEGRAM_API_TOKEN": api_token
         }
@@ -30,6 +29,7 @@ def load_environment_variables():
     except Exception as e:
         print(f"Error loading environment variables: {e}")
         return None
+
 
 config = load_environment_variables()
 api_token = config["TELEGRAM_API_TOKEN"]
@@ -63,16 +63,26 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # CallbackQueries need to be answered, even if no notification to the user is needed
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
     await query.answer()
+    match query.data:
+        case "1":
+            response = context.user_data["transaction"]
+            dbmanager.register_transaction(response)
+            await query.edit_message_text(text="Transação Confirmada")
 
-    await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
+        case "2":
+            pass
+        case "3":
+            await query.edit_message_text(text="Transação Cancelada")
+    #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
 
-#Commands
+# Commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start_msg = "Olá, eu sou o LedgerBot, seu assistente financeiro inteligente!"
     #await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
     await context.bot.send_message(chat_id=update.effective_chat.id, text=start_msg)
 
-#Responses
+# Responses
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat.id
@@ -83,10 +93,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     
     message_type: str =update.message.chat.type
-    msg_text:str = update.message.text
+    msg_text: str = update.message.text
     response = llm.msg_processing(msg_text)
     response = json.loads(response)
-    reply=f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
+    response["ID"] = user_id
+    context.user_data["transaction"] = response
+    reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
     await update.message.reply_text(reply, reply_markup=reply_markup)
 
 
