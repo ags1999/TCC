@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 import llm
 import dbmanager
 import json
-
+from datetime import datetime, timezone
 
 def load_environment_variables():
     try:
@@ -97,6 +97,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = llm.msg_processing(msg_text)
     response = json.loads(response)
     response["ID"] = user_id
+    date = update.message.date
+    print(date)
     context.user_data["transaction"] = response
     reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
     await update.message.reply_text(reply, reply_markup=reply_markup)
