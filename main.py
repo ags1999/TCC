@@ -42,15 +42,15 @@ logging.basicConfig(
 
 keyboard = [
     [
-        InlineKeyboardButton("Confirmar", callback_data="1"),
+        InlineKeyboardButton("Confirmar", callback_data="Confirmar"),
 
     ],
     [
-        InlineKeyboardButton("Editar", callback_data="2"),
+        InlineKeyboardButton("Editar", callback_data="Editar"),
 
     ],
     [
-        InlineKeyboardButton("Cancelar", callback_data="3"),
+        InlineKeyboardButton("Cancelar", callback_data="Cancelar"),
     ],
 ]
 
@@ -92,9 +92,20 @@ category_buttons = [
 ]
 
 
-
+numeric_keyboard = [
+    ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
+    ['.', '0', '←'],
+    ['OK'],# Include decimal point and Done button
+]
 
 reply_markup = InlineKeyboardMarkup(keyboard)
+
+numeric_keyboard_markup = ReplyKeyboardMarkup(
+    numeric_keyboard,
+    resize_keyboard=True,  # Make keyboard smaller to fit screen
+)
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Parses the CallbackQuery and updates the message text."""
@@ -102,20 +113,21 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     response = context.user_data["transaction"]
     # CallbackQueries need to be answered, even if no notification to the user is needed
+    
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
     await query.answer()
     match query.data:
-        case "1":
+        case "Confirmar":
             response = context.user_data["transaction"]
             dbmanager.register_transaction(response)
             await query.edit_message_text(text="Transação Confirmada")
 
-        case "2":
-            await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(field_edit_buttons))
-        case "3":
+        case "Editar":
+            await query.edit_message_text(text="Selecione o campo para correção",reply_markup=InlineKeyboardMarkup(field_edit_buttons))
+        case "Cancelar":
             await query.edit_message_text(text="Transação Cancelada")
         case "Valor":
-            pass
+            await query.edit_message_text(text="Editar",reply_markup=numeric_keyboard_markup)
         case "Categoria":
             await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
         case "Serviços"|"Viagens"|"Mercado"|"Restaurantes"|"Contas"|"Outros":
@@ -123,7 +135,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             context.user_data["transaction"] = response
             reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
             await query.edit_message_text(reply, reply_markup=reply_markup)    
+        case num if 0 <= num <=9:
+            context.user_data["new_value"] = context.user_data["new_value"]*10 + num
+            await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
             
+
             
     #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
 
@@ -150,6 +166,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     date = update.message.date
     print(date)
     context.user_data["transaction"] = response
+    context.user_data["new_value"] = 0
     reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
     await update.message.reply_text(reply, reply_markup=reply_markup)
 
