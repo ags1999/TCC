@@ -137,7 +137,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await query.edit_message_text(reply, reply_markup=reply_markup)    
         case num if 0 <= num <=9:
             context.user_data["new_value"] = context.user_data["new_value"]*10 + num
-            await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
+            await query.edit_message_text(text=f"{context.user_data["new_value"]}")
             
 
             
