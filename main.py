@@ -117,12 +117,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         case "Valor":
             pass
         case "Categoria":
-            query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
+            await query.edit_message_text(text="Editar",reply_markup=InlineKeyboardMarkup(category_buttons))
         case "Serviços"|"Viagens"|"Mercado"|"Restaurantes"|"Contas"|"Outros":
             response["category"] = query.data
             context.user_data["transaction"] = response
             reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
-            await update.message.reply_text(reply, reply_markup=reply_markup)    
+            await query.edit_message_text(reply, reply_markup=reply_markup)    
             
             
     #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
@@ -141,8 +141,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.chat.effective_name
     dbmanager.register_user(user_id, user_name)
 
-
-
     
     message_type: str =update.message.chat.type
     msg_text: str = update.message.text
@@ -155,7 +153,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
     await update.message.reply_text(reply, reply_markup=reply_markup)
 
-
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.chat.id
+    user_name = update.message.chat.effective_name
+    dbmanager.register_user(user_id, user_name)
+    msg = update.message.voice
+    llm.voice_processing(msg)
 
 if __name__ == '__main__':
     print("Starting bot...")
@@ -165,10 +168,12 @@ if __name__ == '__main__':
     start_handler = CommandHandler('start', start)
     msg_handler = MessageHandler(filters.TEXT, handle_message)
     button_handler = CallbackQueryHandler(button)
+    voice_handler = MessageHandler(filters.VOICE, handle_voice)
 
     application.add_handler(start_handler)
     application.add_handler(msg_handler)
     application.add_handler(button_handler)
+    application.add_handler(voice_handler)
 
     print("Polling...")
     application.run_polling(poll_interval=3)

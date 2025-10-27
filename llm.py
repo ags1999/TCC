@@ -59,6 +59,27 @@ def msg_processing(msg: str):
     print("Output: " + response.text)
     return response.text
 
+def voice_processing(msg):
+    prompt = '''Você é um chatbot assistente financeiro.O usuário enviou uma mensagem descrevendo uma transação. Analize a mensagem e forneça:
+    1)O valor descrito na transação, em centavos, retornando 0 se nenhum valor foi descrito.
+    2)A categoria da transação, retornando "Outros" caso não se encaixe em nenhuma alternativa'''
+
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=[
+            prompt,
+            types.Part.from_bytes(
+                data=msg,
+                mime_type='audio/ogg',
+            )
+        ],
+        config={
+        "response_mime_type": "application/json",
+        "response_schema": UserTransactions,
+    },
+    )
+    print(response.text)
+
 '''
 print(response.text)
 
