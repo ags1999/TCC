@@ -91,21 +91,36 @@ category_buttons = [
     ],
 ]
 
-
 numeric_keyboard = [
-    ['1', '2', '3'],
-    ['4', '5', '6'],
-    ['7', '8', '9'],
-    ['.', '0', '←'],
-    ['OK'],# Include decimal point and Done button
+    [
+        InlineKeyboardButton("1", callback_data="1"),
+        InlineKeyboardButton("2", callback_data="2"),
+        InlineKeyboardButton("3", callback_data="3"),
+
+    ],
+    [
+        InlineKeyboardButton("4", callback_data="4"),
+        InlineKeyboardButton("5", callback_data="5"),
+        InlineKeyboardButton("6", callback_data="6"),
+
+    ],
+    [
+        InlineKeyboardButton("7", callback_data="7"),
+        InlineKeyboardButton("8", callback_data="8"),
+        InlineKeyboardButton("9", callback_data="9"),
+
+    ],
+    [
+        InlineKeyboardButton("OK", callback_data="OK"),
+        InlineKeyboardButton("0", callback_data="0"),
+        InlineKeyboardButton("←", callback_data="←"),
+
+    ],
 ]
 
-reply_markup = InlineKeyboardMarkup(keyboard)
 
-numeric_keyboard_markup = ReplyKeyboardMarkup(
-    numeric_keyboard,
-    resize_keyboard=True,  # Make keyboard smaller to fit screen
-)
+reply_markup = InlineKeyboardMarkup(keyboard)
+numeric_keyboard_markup = InlineKeyboardMarkup(numeric_keyboard)
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Parses the CallbackQuery and updates the message text."""
@@ -135,13 +150,25 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             context.user_data["transaction"] = response
             reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
             await query.edit_message_text(reply, reply_markup=reply_markup)    
-        case num if 0 <= num <=9:
-            context.user_data["new_value"] = context.user_data["new_value"]*10 + num
-            await query.edit_message_text(text=f"{context.user_data["new_value"]}")
-            
+        case _ if query.data.isdigit():
+            context.user_data["new_value"] = context.user_data["new_value"]*10 + int(query.data)
+            await query.edit_message_text(text=f"Novo valor:\n{context.user_data["new_value"]/100:.2f}", reply_markup=numeric_keyboard_markup)
+        case "←":
+            context.user_data["new_value"] = context.user_data["new_value"]/10
+            await query.edit_message_text(text=f"Novo valor:\n{context.user_data["new_value"]/100:.2f}", reply_markup=numeric_keyboard_markup)
+        case "OK":
+            response["value"] = context.user_data["new_value"]
+            context.user_data["transaction"] = response
+            context.user_data["new_value"] = 0
+            reply = f'''Valor:R${response["value"] / 100:.2f}\nCategoria:{response["category"]}'''
+            await query.edit_message_text(reply, reply_markup=reply_markup)
 
-            
-    #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
+
+
+
+
+
+        #await query.edit_message_text(text=f"Selected option: {query.data}", reply_markup=reply_markup)
 
 # Commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
