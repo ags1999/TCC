@@ -197,12 +197,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = f'''Valor:R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
     await update.message.reply_text(reply, reply_markup=reply_markup)
 
+
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.chat.id
-    user_name = update.message.chat.effective_name
-    dbmanager.register_user(user_id, user_name)
-    msg = update.message.voice
-    llm.voice_processing(msg)
+    ogg_path=None
+    try:
+        voice: Voice = update.message.voice
+        chat_id = update.effective_chat.id
+
+        # 1. Baixar o arquivo OGG enviado pelo usuário
+        os.makedirs("data", exist_ok=True)
+        ogg_file = await context.bot.get_file(voice.file_id)
+        ogg_path = f"data/{chat_id}.ogg"
+        await ogg_file.download_to_drive(ogg_path)
+        if not os.path.exists(ogg_path):
+            raise FileNotFoundError(f"Arquivo não encontrado após download: {ogg_path}")
+        response = llm.voice_processing(ogg_path)
+        await update.message.reply_text(response)
+
+    except Exception as e:
+        print(f"Erro no processamento de voz: {e}")
+        await update.message.reply_text("Desculpe, ocorreu um erro ao processar seu áudio.")
+
+    finally:
+    # Limpeza: remover arquivo temporário se existir
+        if ogg_path and os.path.exists(ogg_path):
+            try:
+                os.remove(ogg_path)
+            except Exception as cleanup_error:
+                print(f"Erro ao remover arquivo temporário {ogg_path}: {cleanup_error}")
+
+
+
+
 
 if __name__ == '__main__':
     print("Starting bot...")
