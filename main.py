@@ -6,9 +6,9 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 import llm
-#import dbmanager as dbm
+import dbmanager as dbm
 import json
-#from datetime import datetime, timezone
+from datetime import datetime
 
 def load_environment_variables():
     try:
@@ -134,7 +134,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     match query.data:
         case "Confirmar":
             response = context.user_data["transaction"]
-            #dbm.register_transaction(response)
+            dbm.register_transaction(response)
             await query.edit_message_text(text="Transação Confirmada")
 
         case "Editar":
@@ -180,13 +180,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat.id
     user_name = update.message.chat.effective_name
-    #dbm.register_user(user_id, user_name)
+    dbm.register_user(user_id, user_name)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat.id
     user_name = update.message.chat.effective_name
-    #dbmanager.register_user(user_id, user_name)
+    dbm.register_user(user_id, user_name)
 
     
     message_type: str =update.message.chat.type
@@ -195,19 +195,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = json.loads(response)
     response["ID"] = user_id
     date = update.message.date
+    response["date"] = date
     print(date)
     context.user_data["transaction"] = response
     context.user_data["new_value"] = 0
     reply = f'''Valor: R${response["value"]/100:.2f}\nCategoria:{response["category"]}'''
-    #await update.message.reply_text(reply, reply_markup=reply_markup)
-    await update.message.reply_text(reply)
+    await update.message.reply_text(reply, reply_markup=reply_markup)
+    #await update.message.reply_text(reply)
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ogg_path=None
     user_id = update.message.chat.id
     user_name = update.message.chat.effective_name
-    #dbm.register_user(user_id, user_name)
+    dbm.register_user(user_id, user_name)
     try:
         voice: Voice = update.message.voice
         chat_id = update.effective_chat.id
@@ -223,12 +224,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = json.loads(response)
         response["ID"] = user_id
         date = update.message.date
+        response["date"] = date
         print(date)
         context.user_data["transaction"] = response
         context.user_data["new_value"] = 0
         reply = f'''Valor: R${response["value"] / 100:.2f}\nCategoria:{response["category"]}'''
-        # await update.message.reply_text(reply, reply_markup=reply_markup)
-        await update.message.reply_text(reply)
+        await update.message.reply_text(reply, reply_markup=reply_markup)
+        #await update.message.reply_text(reply)
 
     except Exception as e:
         print(f"Erro no processamento de voz: {e}")
@@ -252,7 +254,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await file.download_to_drive(photo_path)
     #logger.info(f"Photo downloaded to {photo_path}")
     response = llm.photo_processing(photo_path)
-    await update.message.reply_text(response)
+    response = json.loads(response)
+    response["ID"] = user_id
+    date = update.message.date
+    response["date"] = date
+    print(date)
+    context.user_data["transaction"] = response
+    context.user_data["new_value"] = 0
+    reply = f'''Valor: R${response["value"] / 100:.2f}\nCategoria:{response["category"]}'''
+    await update.message.reply_text(reply, reply_markup=reply_markup)
+    #await update.message.reply_text(reply)
 
 if __name__ == '__main__':
     print("Starting bot...")
