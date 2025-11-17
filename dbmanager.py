@@ -3,6 +3,10 @@ from unicodedata import category
 import psycopg2
 import psycopg2.extras
 import uuid
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from datetime import datetime
 # Connect to an existing database
 conn = psycopg2.connect("dbname=ledgerBotDB user=alexandre")
 
@@ -46,6 +50,23 @@ def register_transaction(transaction):
     except Exception as e:
         print(f"Error: {e}")
     pass
+
+def retorna_consulta():
+    query = f'''SELECT * FROM transactions
+    where EXTRACT(MONTH FROM date) ={datetime.now().month}
+    '''
+    df = pd.read_sql(query, conn)
+    fig, ax = plt.subplots(figsize=(10,10))
+    ax.axis('off')
+    table = ax.table(cellText=df.values, colLabels=df.columns, loc='center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.2)
+    with PdfPages("transactions.pdf") as pdf:
+        pdf.savefig(fig)
+    plt.close(fig)
+
+
 
 '''
 # Execute a command: this creates a new table

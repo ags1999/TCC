@@ -138,19 +138,53 @@ def photo_processing(photo_path):
 
     return response.text
 
-'''
-print(response.text)
+query_parameters_function = {
+    "name": "query_parameters",
+    "description": "Returns the parameters for an SQL query",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "min_value": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "List of people attending the meeting.",
+            },
+            "max_value": {
+                "type": "string",
+                "description": "Date of the meeting (e.g., '2024-07-29')",
+            },
+            "min_date": {
+                "type": "string",
+                "description": "Time of the meeting (e.g., '15:00')",
+            },
+            "max_date": {
+                "type": "string",
+                "description": "The subject or topic of the meeting.",
+            },
+        },
+        "required": ["min_value", "max_value", "min_date", "max_date"],
+    },
+}
 
+def query():
+    print("Query")
 
-response = chat.send_message("Gastei 581,25 reais")
-print("Test Input")
-print(response.text)
+def transaction():
+    print("Transaction")
 
-response = chat.send_message("Fui ao parque")
-print("Test Input 2")
-print(response.text)
+def query_processing(msg):
+    config = types.GenerateContentConfig(
+        tools=[query, transaction],
+    )
+    prompt = "Você é um chatbot assistente financeiro. O usuário enviou uma mensagem onde ele descreve uma transação ou uma consulta a um banco de dados.\
+                 Determine a funçao adequada para o tratamento da mensagem."
+    prompt = prompt + msg
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=config,
+    )
+    print(response.text)
 
-#for message in chat.get_history():
-#    print(f'role - {message.role}',end=": ")
-#    print(message.parts[0].text)
-'''
+def function_request():
+    pass

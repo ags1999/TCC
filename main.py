@@ -176,6 +176,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
     await context.bot.send_message(chat_id=update.effective_chat.id, text=start_msg)
 
+async def consulta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    dbm.retorna_consulta()
+
 # Responses
 async def registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.chat.id
@@ -266,17 +269,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #await update.message.reply_text(reply)
 
 if __name__ == '__main__':
+    llm.query_processing("Gastei 10 reais no mercado")
+    llm.query_processing("Mostre todos os gastos")
     print("Starting bot...")
 
     application = ApplicationBuilder().token(api_token).build()
     
     start_handler = CommandHandler('start', start)
+    con_handler = CommandHandler('consulta', consulta)
     msg_handler = MessageHandler(filters.TEXT, handle_message)
     button_handler = CallbackQueryHandler(button)
     voice_handler = MessageHandler(filters.VOICE, handle_voice)
     photo_handler = MessageHandler(filters.PHOTO, handle_photo)
 
     application.add_handler(start_handler)
+    application.add_handler(con_handler)
     application.add_handler(msg_handler)
     application.add_handler(button_handler)
     application.add_handler(voice_handler)
