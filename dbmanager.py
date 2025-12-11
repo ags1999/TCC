@@ -1,6 +1,7 @@
 from unicodedata import category
 
 import psycopg2
+from psycopg2 import sql
 import psycopg2.extras
 import uuid
 import pandas as pd
@@ -51,9 +52,55 @@ def register_transaction(transaction):
         print(f"Error: {e}")
     pass
 
-def retorna_consulta():
-    query = f'''SELECT * FROM transactions
-    where EXTRACT(MONTH FROM date) ={datetime.now().month}
+def retorna_consulta(user_id):
+#def retorna_consulta(user_id, min_value, max_value, min_date, max_date, categories):
+    query = '''SELECT * FROM transactions WHERE'''
+
+
+    min_value = None
+    max_value= None
+    min_date = None
+    max_date = None
+    categories = ["Mercado", "Contas", "Outros"]
+    conditions=[]
+    conditions.append("user_id = %s")
+    params=[]
+    params.append(user_id)
+    # Date range
+    if min_date is not None:
+        conditions.append("date >= %s")
+        params.append(min_date)
+    if max_date is not None:
+        conditions.append("date <= %s")
+        params.append(max_date)
+
+    # Numeric range (price, score, etc.)
+    if min_value is not None:
+        conditions.append("value >= %s")
+        params.append(min_price)
+    if max_value is not None:
+        conditions.append("value <= %s")
+        params.append(max_price)
+
+    # Categories
+    if categories is not None:
+        conditions.append("category in %s")
+        params.append(tuple(categories))
+
+    # Add other filters similarly...
+    # if some_text:
+    #     conditions.append("name ILIKE %s")
+    #     params.append(f"%{some_text}%")
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    print(query)
+    cur.execute(query, params)
+    results = cur.fetchall()
+    print(results)
+    return "test"
+
     '''
     df = pd.read_sql(query, conn)
     fig, ax = plt.subplots(figsize=(10,10))
@@ -65,9 +112,17 @@ def retorna_consulta():
     with PdfPages("transactions.pdf") as pdf:
         pdf.savefig(fig)
     plt.close(fig)
-
-
-
+    '''
+def consulta_ano_mes(user_id, ano, mes):
+    sql_query = """
+                SELECT * \
+                FROM transactions
+                WHERE user_id = %s \
+                  AND EXTRACT(YEAR FROM date) = %s \
+                  AND EXTRACT(MONTH FROM date) = %s; \
+                """
+    params = [user_id, int(ano), int(mes)]
+    print(params)
 '''
 # Execute a command: this creates a new table
 #cur.execute("CREATE TABLE test (id serial PRIMARY KEY, num integer, data varchar);")

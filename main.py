@@ -117,7 +117,22 @@ numeric_keyboard = [
 
     ],
 ]
+years = []
+for y in range(2025, datetime.today().year+1):
+    years.append(str(y))
 
+years_keyboard = []
+for y in years:
+    years_keyboard.append([InlineKeyboardButton(text=str(y), callback_data=y)])
+
+months = [
+    "Janeiro", "Fevereiro", "Março", "Abril",
+    "Maio", "Junho", "Julho", "Agosto",
+    "Setembro", "Outubro", "Novembro", "Dezembro"
+]
+months_keyboard = []
+for m in months:
+    months_keyboard.append([InlineKeyboardButton(text=m, callback_data=m)])
 
 reply_markup = InlineKeyboardMarkup(keyboard)
 numeric_keyboard_markup = InlineKeyboardMarkup(numeric_keyboard)
@@ -125,12 +140,21 @@ numeric_keyboard_markup = InlineKeyboardMarkup(numeric_keyboard)
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Parses the CallbackQuery and updates the message text."""
     query = update.callback_query
+    await query.answer()
+    if query.data in years:
+        context.user_data["year"] = query.data
+        await query.edit_message_text(text="Selecione o mes", reply_markup=InlineKeyboardMarkup(months_keyboard))
+        return
+    elif query.data in months:
+        dbm.consulta_ano_mes(query.id, int(context.user_data["year"]), months.index(query.data)+1)
+        return
+
 
     response = context.user_data["transaction"]
     # CallbackQueries need to be answered, even if no notification to the user is needed
     
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
-    await query.answer()
+
     match query.data:
         case "Confirmar":
             response = context.user_data["transaction"]
@@ -177,7 +201,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=start_msg)
 
 async def consulta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    dbm.retorna_consulta()
+    #response = dbm.retorna_consulta(user_id=update.effective_chat.id)
+    #await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Selecione o ano", reply_markup=InlineKeyboardMarkup(years_keyboard))
 
 # Responses
 async def registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -269,8 +296,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #await update.message.reply_text(reply)
 
 if __name__ == '__main__':
-    llm.query_processing("Gastei 10 reais no mercado")
-    llm.query_processing("Mostre todos os gastos")
+    #llm.query_processing("Gastei 10 reais no mercado")
+    #llm.query_processing("Mostre todos os gastos")
     print("Starting bot...")
 
     application = ApplicationBuilder().token(api_token).build()
