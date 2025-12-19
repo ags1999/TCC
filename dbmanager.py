@@ -6,6 +6,7 @@ import psycopg2.extras
 import uuid
 import pandas as pd
 import matplotlib.pyplot as plt
+import io
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 # Connect to an existing database
@@ -14,6 +15,11 @@ conn = psycopg2.connect("dbname=ledgerBotDB user=alexandre")
 # Open a cursor to perform database operations
 cur = conn.cursor()
 psycopg2.extras.register_uuid()
+months = [
+    "Janeiro", "Fevereiro", "Março", "Abril",
+    "Maio", "Junho", "Julho", "Agosto",
+    "Setembro", "Outubro", "Novembro", "Dezembro"
+]
 def register_user(id, name):
     query = f'''SELECT EXISTS(
     SELECT 1 
@@ -115,7 +121,7 @@ def retorna_consulta(user_id):
     '''
 def consulta_ano_mes(user_id, ano, mes):
     sql_query = """
-                SELECT * \
+                SELECT value, category \
                 FROM transactions
                 WHERE user_id = %s \
                   AND EXTRACT(YEAR FROM date) = %s \
@@ -123,6 +129,36 @@ def consulta_ano_mes(user_id, ano, mes):
                 """
     params = [user_id, int(ano), int(mes)]
     print(params)
+    response = pd.io.sql.read_sql(sql_query, conn, params=params)
+    response = response.groupby("category", as_index=False)["value"].sum()
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.pie(response["value"], labels=response["category"], autopct="%1.1f%%")
+    ax.set_title(f"Gastos em {months[int(mes)-1]}/{ano}")
+
+    # --- Criar a lista abaixo do gráfico ---
+    lista_texto = "\n".join(f"{cat}: R${val/100:.2f}" for cat, val in zip(response["category"], response["value"]))
+
+    # Inserir texto na imagem (abaixo do gráfico)
+    plt.figtext(
+        0.5, -0.05,
+        lista_texto,
+        ha="center", va="top", fontsize=12
+    )
+
+    # Ajustar layout para caber o texto
+    plt.tight_layout()
+
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    plt.close(fig)
+
+
+
+    return buf
+
 '''
 # Execute a command: this creates a new table
 #cur.execute("CREATE TABLE test (id serial PRIMARY KEY, num integer, data varchar);")

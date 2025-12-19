@@ -131,8 +131,11 @@ months = [
     "Setembro", "Outubro", "Novembro", "Dezembro"
 ]
 months_keyboard = []
-for m in months:
-    months_keyboard.append([InlineKeyboardButton(text=m, callback_data=m)])
+#for m in months:
+#    months_keyboard.append([InlineKeyboardButton(text=m, callback_data=m)])
+
+for i in range(0, len(months), 2):
+    months_keyboard.append([InlineKeyboardButton(text=months[i], callback_data=months[i]),InlineKeyboardButton(text=months[i+1], callback_data=months[i+1])])
 
 reply_markup = InlineKeyboardMarkup(keyboard)
 numeric_keyboard_markup = InlineKeyboardMarkup(numeric_keyboard)
@@ -146,7 +149,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await query.edit_message_text(text="Selecione o mes", reply_markup=InlineKeyboardMarkup(months_keyboard))
         return
     elif query.data in months:
-        dbm.consulta_ano_mes(query.id, int(context.user_data["year"]), months.index(query.data)+1)
+        buf = dbm.consulta_ano_mes(update.effective_chat.id, int(context.user_data["year"]), months.index(query.data)+1)
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_photo(photo=buf)
         return
 
 
@@ -308,7 +313,9 @@ if __name__ == '__main__':
     button_handler = CallbackQueryHandler(button)
     voice_handler = MessageHandler(filters.VOICE, handle_voice)
     photo_handler = MessageHandler(filters.PHOTO, handle_photo)
+    register_handler = MessageHandler(Filters.ALL, registration)
 
+    application.add_handler(register_handler)
     application.add_handler(start_handler)
     application.add_handler(con_handler)
     application.add_handler(msg_handler)
