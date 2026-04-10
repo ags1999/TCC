@@ -10,6 +10,7 @@ import dbmanager as dbm
 import json
 from datetime import datetime
 
+
 def load_environment_variables():
     try:
         # Load variables from .env file into environment
@@ -201,8 +202,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    start_msg = "Olá, eu sou o LedgerBot, seu assistente financeiro inteligente!"
+    start_msg = ("Olá, eu sou o LedgerBot, seu assistente financeiro inteligente! Eu posso reconhecer e armazenar seus gastos através de mensagens de texto, voz, \
+e fotos, e gerar gráficos para consulta. Para ver os comandos disponíveis, digite /help .")
     #await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
+    user_id = update.message.chat.id
+    user_name = update.message.chat.effective_name
+    dbm.register_user(user_id, user_name)
     await context.bot.send_message(chat_id=update.effective_chat.id, text=start_msg)
 
 async def consulta(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,13 +217,11 @@ async def consulta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Selecione o ano", reply_markup=InlineKeyboardMarkup(years_keyboard))
 
 # Responses
-async def registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.chat.id
-    user_name = update.message.chat.effective_name
-    dbm.register_user(user_id, user_name)
+
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     user_id = update.message.chat.id
     user_name = update.message.chat.effective_name
     dbm.register_user(user_id, user_name)
@@ -240,6 +243,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     ogg_path=None
     user_id = update.message.chat.id
     user_name = update.message.chat.effective_name
@@ -280,6 +284,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"Erro ao remover arquivo temporário {ogg_path}: {cleanup_error}")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     user_id = update.message.chat.id
     photo = update.message.photo[-1]
     file = await photo.get_file()
@@ -313,9 +318,7 @@ if __name__ == '__main__':
     button_handler = CallbackQueryHandler(button)
     voice_handler = MessageHandler(filters.VOICE, handle_voice)
     photo_handler = MessageHandler(filters.PHOTO, handle_photo)
-    register_handler = MessageHandler(Filters.ALL, registration)
 
-    application.add_handler(register_handler)
     application.add_handler(start_handler)
     application.add_handler(con_handler)
     application.add_handler(msg_handler)
