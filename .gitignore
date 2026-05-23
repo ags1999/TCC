@@ -8,3 +8,9 @@ pyvenv.cfg
 *docx
 *pdf
 *png
+/.idea
+/data
+/prints
+/share
+.coverage
+projeto_final_2.txt
