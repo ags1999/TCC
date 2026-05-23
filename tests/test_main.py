@@ -621,3 +621,101 @@ class TestHandlePhotoErros:
             await handle_photo(update, context)
 
         assert "erro" in update.message.reply_text.call_args[0][0].lower()
+
+# ─── help_command ─────────────────────────────────────────────────────────────
+
+class TestHelpCommand:
+
+    @pytest.mark.asyncio
+    async def test_help_envia_mensagem(self):
+        from main import help_command
+        update  = make_update(user_id=99)
+        context = make_context()
+
+        await help_command(update, context)
+
+        context.bot.send_message.assert_called_once()
+        msg = context.bot.send_message.call_args[1]["text"]
+        assert "LedgerBot" in msg
+        assert "/consulta"  in msg
+        assert "/help"      in msg
+
+    @pytest.mark.asyncio
+    async def test_help_falha_envia_erro(self):
+        from main import help_command
+        update  = make_update(user_id=99)
+        context = make_context()
+
+        context.bot.send_message = AsyncMock(
+            side_effect=[Exception("Falha no Telegram"), None]
+        )
+        await help_command(update, context)
+
+        assert context.bot.send_message.call_count == 2
+        msg = context.bot.send_message.call_args[1]["text"]
+        assert "possível" in msg
+
+
+# ─── timeout da API Gemini ────────────────────────────────────────────────────
+
+class TestTimeoutGemini:
+
+    @pytest.mark.asyncio
+    async def test_timeout_em_handle_message(self):
+        import asyncio
+        from main import handle_message
+        update  = make_update(text="gastei 50 reais")
+        context = make_context()
+
+        with patch("main.dbm.register_user"), \
+             patch("main.asyncio.wait_for",
+                   side_effect=asyncio.TimeoutError()):
+            await handle_message(update, context)
+
+        msg = update.message.reply_text.call_args[0][0]
+        assert "demorou demais" in msg
+
+    @pytest.mark.asyncio
+    async def test_timeout_em_handle_voice(self):
+        import asyncio
+        from main import handle_voice
+        update  = make_update(user_id=99)
+        context = make_context()
+        update.message.voice      = MagicMock(file_id="abc123")
+        update.message.reply_text = AsyncMock()
+
+        with patch("main.dbm.register_user"), \
+             patch("main.os.makedirs"), \
+             patch("main.os.path.exists", return_value=True), \
+             patch("main.os.remove"), \
+             patch("main.asyncio.wait_for",
+                   side_effect=asyncio.TimeoutError()):
+            context.bot.get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock())
+            )
+            await handle_voice(update, context)
+
+        msg = update.message.reply_text.call_args[0][0]
+        assert "demorou demais" in msg
+
+    @pytest.mark.asyncio
+    async def test_timeout_em_handle_photo(self):
+        import asyncio
+        from main import handle_photo
+        update  = make_update(user_id=99)
+        context = make_context()
+        update.message.reply_text = AsyncMock()
+        update.message.photo      = [MagicMock(file_id="img123")]
+
+        with patch("main.dbm.register_user"), \
+             patch("main.os.makedirs"), \
+             patch("main.os.path.exists", return_value=True), \
+             patch("main.os.remove"), \
+             patch("main.asyncio.wait_for",
+                   side_effect=asyncio.TimeoutError()):
+            mock_file = MagicMock(download_to_drive=AsyncMock())
+            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+            await handle_photo(update, context)
+
+        msg = update.message.reply_text.call_args[0][0]
+        assert "demorou demais" in msg
