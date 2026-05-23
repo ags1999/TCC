@@ -1,33 +1,24 @@
 from google import genai
 from google.genai import types
 import os
+import logging
 from pydantic import BaseModel
 import json
 from enum import Enum
 
+logger = logging.getLogger(__name__)
+
+
 class ExpenseCategory(Enum):
-    SERVICES = "Serviços"
-    TRAVEL = "Viagens"
-    GROCERIES = "Mercado"
+    SERVICES    = "Serviços"
+    TRAVEL      = "Viagens"
+    GROCERIES   = "Mercado"
     RESTAURANTS = "Restaurantes"
-    BILLS = "Contas"
-    OTHER = "Outros"
-    
+    BILLS       = "Contas"
+    OTHER       = "Outros"
+
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-'''
-chat = client.chats.create(model="gemini-2.5-flash")
-
-response = chat.send_message("You are a financial assistant chatbot. Return following requests as a JSON object matching an implemented command.\
-    If the command is not recognized, return the string 'Sorry, I do not understand'.\
-    Accepted commands and JSON examples:\
-        New transaction:\
-        {\
-            'command' = 'register',\
-            'value' = Monetary Input Value, numeric value only\
-        } ",
-)
-'''
 
 
 class UserTransactions(BaseModel):
@@ -35,156 +26,134 @@ class UserTransactions(BaseModel):
     category: ExpenseCategory
 
 
+# ─── Prompt base ─────────────────────────────────────────────────────────────
+
+_PROMPT_TEXT = (
+    "Você é um chatbot assistente financeiro. O usuário enviou uma mensagem descrevendo "
+    "uma transação. Analise a mensagem e forneça:\n"
+    "1) O valor descrito na transação, em centavos, retornando 0 se nenhum valor foi descrito.\n"
+    "2) A categoria da transação, retornando 'Outros' caso não se encaixe em nenhuma alternativa."
+)
+
+_PROMPT_PHOTO = (
+    "Você é um chatbot assistente financeiro. O usuário enviou uma imagem descrevendo uma "
+    "transação. Analise a imagem e forneça:\n"
+    "1) O valor total descrito na transação, em centavos, retornando 0 se nenhum valor foi descrito. "
+    "Se a imagem descrever múltiplos itens (ex: nota fiscal de supermercado), retorne o valor total. "
+    "Se forem listados descontos, subtraia do valor total.\n"
+    "2) A categoria da transação, retornando 'Outros' caso não se encaixe em nenhuma alternativa."
+)
+
+_SCHEMA_CONFIG = types.GenerateContentConfig(
+    response_mime_type="application/json",
+    response_schema=UserTransactions,
+)
+
+_FALLBACK = json.dumps({"value": 0, "category": "Outros"})
 
 
+# ─── Funções de processamento ─────────────────────────────────────────────────
+
+async def msg_processing(msg: str) -> str:
+    try:
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=_PROMPT_TEXT + msg,
+            config=_SCHEMA_CONFIG,
+        )
+        logger.info(f"msg_processing concluído: {response.text}")
+        return response.text
+    except Exception as e:
+        logger.error(f"Erro em msg_processing(): {e}", exc_info=True)
+        return _FALLBACK
 
 
+async def voice_processing(audio_path: str) -> str:
+    try:
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Arquivo de áudio não encontrado: {audio_path}")
+        with open(audio_path, "rb") as f:
+            audio_bytes = f.read()
+        if not audio_bytes:
+            raise ValueError(f"Arquivo de áudio vazio: {audio_path}")
 
-def msg_processing(msg: str):
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                _PROMPT_TEXT,
+                types.Part.from_bytes(data=audio_bytes, mime_type="audio/ogg"),
+            ],
+            config=_SCHEMA_CONFIG,
+        )
+        logger.info(f"voice_processing concluído: {response.text}")
+        return response.text
+    except FileNotFoundError as e:
+        logger.error(f"Arquivo não encontrado em voice_processing(): {e}")
+        return _FALLBACK
+    except ValueError as e:
+        logger.error(f"Arquivo inválido em voice_processing(): {e}")
+        return _FALLBACK
+    except Exception as e:
+        logger.error(f"Erro inesperado em voice_processing(): {e}", exc_info=True)
+        return _FALLBACK
 
-    #prompt = "Extract the monetary value specified in the following message and convert to cents, returning 0 if no value specified. Also, include a short description, returning an empty string if nothing is provided: "
-    prompt = '''Você é um chatbot assistente financeiro.O usuário enviou uma mensagem descrevendo uma transação. Analise a mensagem e forneça:
-    1)O valor descrito na transação, em centavos, retornando 0 se nenhum valor foi descrito.
-    2)A categoria da transação, retornando "Outros" caso não se encaixe em nenhuma alternativa'''
-    prompt = prompt + msg
-    response = client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents=prompt,
-    config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=UserTransactions,
-        ),
-    )
-    print(response.parsed)
-    print("Output: " + response.text)
-    return response.text
 
-def voice_processing(audio_path):
-    prompt = '''Você é um chatbot assistente financeiro.O usuário enviou uma mensagem descrevendo uma transação. Analise a mensagem e forneça:
-    1)O valor descrito na transação, em centavos, retornando 0 se nenhum valor foi descrito.
-    2)A categoria da transação, retornando "Outros" caso não se encaixe em nenhuma alternativa'''
+async def photo_processing(photo_path: str) -> str:
+    try:
+        if not os.path.exists(photo_path):
+            raise FileNotFoundError(f"Arquivo de imagem não encontrado: {photo_path}")
+        with open(photo_path, "rb") as f:
+            photo_bytes = f.read()
+        if not photo_bytes:
+            raise ValueError(f"Arquivo de imagem vazio: {photo_path}")
 
-    '''
-    my_file = client.files.upload(file=audio_path)
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=[
-            prompt,
-            my_file,
-        ],
-        config={
-        "response_mime_type": "application/json",
-        "response_schema": UserTransactions,
-    },
-    )
-    '''
-    with open(audio_path, 'rb') as f:
-        audio_bytes = f.read()
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=[
-            prompt,
-            types.Part.from_bytes(
-                data=audio_bytes,
-                mime_type='audio/ogg',
-            ),
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=UserTransactions,
-        ),
-    )
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                _PROMPT_PHOTO,
+                types.Part.from_bytes(data=photo_bytes, mime_type="image/jpeg"),
+            ],
+            config=_SCHEMA_CONFIG,
+        )
+        logger.info(f"photo_processing concluído: {response.text}")
+        return response.text
+    except FileNotFoundError as e:
+        logger.error(f"Arquivo não encontrado em photo_processing(): {e}")
+        return _FALLBACK
+    except ValueError as e:
+        logger.error(f"Arquivo inválido em photo_processing(): {e}")
+        return _FALLBACK
+    except Exception as e:
+        logger.error(f"Erro inesperado em photo_processing(): {e}", exc_info=True)
+        return _FALLBACK
 
-    return response.text
 
-def photo_processing(photo_path):
-    prompt = '''Você é um chatbot assistente financeiro. O usuário enviou uma imagem descrevendo uma transação. Analise a mensagem e forneça:
-    1)O valor total descrito na transação, em centavos, retornando 0 se nenhum valor foi descrito.
-    Se a imagem descrever múltiplos itens, como por exemplo uma nota fiscal de supermercado, retorne o valor total.
-    Se forem listados descontos, subtraia do valor total
-    2)A categoria da transação, retornando "Outros" caso não se encaixe em nenhuma alternativa'''
-
-    '''
-    my_file = client.files.upload(file=audio_path)
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=[
-            prompt,
-            my_file,
-        ],
-        config={
-        "response_mime_type": "application/json",
-        "response_schema": UserTransactions,
-    },
-    )
-    '''
-    with open(photo_path, 'rb') as f:
-        photo_bytes = f.read()
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=[
-            prompt,
-            types.Part.from_bytes(
-                data=photo_bytes,
-                mime_type='image/jpeg',
-            ),
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=UserTransactions,
-        ),
-
-    )
-
-    return response.text
-
-query_parameters_function = {
-    "name": "query_parameters",
-    "description": "Returns the parameters for an SQL query",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "min_value": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "List of people attending the meeting.",
-            },
-            "max_value": {
-                "type": "string",
-                "description": "Date of the meeting (e.g., '2024-07-29')",
-            },
-            "min_date": {
-                "type": "string",
-                "description": "Time of the meeting (e.g., '15:00')",
-            },
-            "max_date": {
-                "type": "string",
-                "description": "The subject or topic of the meeting.",
-            },
-        },
-        "required": ["min_value", "max_value", "min_date", "max_date"],
-    },
-}
+# ─── Function Calling (em desenvolvimento) ────────────────────────────────────
 
 def query():
     print("Query")
 
+
 def transaction():
     print("Transaction")
 
-def query_processing(msg):
-    config = types.GenerateContentConfig(
-        tools=[query, transaction],
-    )
-    prompt = "Você é um chatbot assistente financeiro. O usuário enviou uma mensagem onde ele descreve uma transação ou uma consulta a um banco de dados.\
-                 Determine a funçao adequada para o tratamento da mensagem."
-    prompt = prompt + msg
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=config,
-    )
-    print(response.text)
 
-def function_request():
-    pass
+def query_processing(msg: str):
+    try:
+        config = types.GenerateContentConfig(tools=[query, transaction])
+        prompt = (
+            "Você é um chatbot assistente financeiro. O usuário enviou uma mensagem onde "
+            "descreve uma transação ou uma consulta a um banco de dados. "
+            "Determine a função adequada para o tratamento da mensagem. "
+        ) + msg
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=config,
+        )
+        logger.info(f"query_processing concluído: {response.text}")
+        return response.text
+
+    except Exception as e:
+        logger.error(f"Erro em query_processing(): {e}", exc_info=True)
+        return None

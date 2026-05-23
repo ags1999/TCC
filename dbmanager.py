@@ -1,182 +1,137 @@
-from unicodedata import category
-
 import psycopg2
-from psycopg2 import sql
 import psycopg2.extras
 import uuid
+import logging
 import pandas as pd
 import matplotlib.pyplot as plt
 import io
-from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
-# Connect to an existing database
-conn = psycopg2.connect("dbname=ledgerBotDB user=alexandre")
 
-# Open a cursor to perform database operations
-cur = conn.cursor()
+logger = logging.getLogger(__name__)
+
+conn = psycopg2.connect("dbname=ledgerBotDB user=alexandre")
+cur  = conn.cursor()
 psycopg2.extras.register_uuid()
+
 months = [
     "Janeiro", "Fevereiro", "Março", "Abril",
     "Maio", "Junho", "Julho", "Agosto",
     "Setembro", "Outubro", "Novembro", "Dezembro"
 ]
-def register_user(id, name):
-    query = f'''SELECT EXISTS(
-    SELECT 1 
-    FROM users 
-    WHERE users.user_id = %s
-    )'''
-    cur.execute(query, (id,))
-        
-        # Fetch result
-    exists = cur.fetchone()[0]
-    if not exists:
-        insert = '''INSERT INTO users(user_id, username) VALUES (%s, %s)'''
-        cur.execute(insert, (id, name))
-        conn.commit()
-    print(exists)
 
-#TODO register date
-def register_transaction(transaction):
-    # User Transactions : Transaction ID, User ID, Value, Category, Date, Description
-    trs_id =uuid.uuid4()
-    user_id = transaction["ID"]
-    value = transaction["value"]
-    trs_category = transaction["category"]
-    trs_date = transaction["date"]
-    if "description" in transaction:
-        trs_description = transaction["description"]
-    else:
-        trs_description = None
+
+def register_user(user_id: int, name: str) -> bool:
+    """
+    Registra o usuário se ainda não existir.
+    Retorna True em caso de sucesso, False em caso de falha.
+    """
     try:
-        insert = '''INSERT INTO transactions(transactions_id, user_id, value, category, date, description) \
-                VALUES (%s, %s, %s, %s, %s, %s)'''
+        query = "SELECT EXISTS(SELECT 1 FROM users WHERE user_id = %s)"
+        cur.execute(query, (user_id,))
+        exists = cur.fetchone()[0]
+
+        if not exists:
+            insert = "INSERT INTO users(user_id, username) VALUES (%s, %s)"
+            cur.execute(insert, (user_id, name))
+            conn.commit()
+            logger.info(f"Novo usuário registrado: {user_id} ({name})")
+        else:
+            logger.debug(f"Usuário já existente: {user_id}")
+
+        return True
+
+    except psycopg2.Error as e:
+        logger.error(f"Erro de banco ao registrar usuário {user_id}: {e}", exc_info=True)
+        conn.rollback()
+        return False
+    except Exception as e:
+        logger.error(f"Erro inesperado em register_user(): {e}", exc_info=True)
+        conn.rollback()
+        return False
+
+
+def register_transaction(transaction: dict) -> bool:
+    """
+    Persiste uma transação confirmada no banco.
+    Retorna True em caso de sucesso, False em caso de falha.
+    """
+    try:
+        trs_id          = uuid.uuid4()
+        user_id         = transaction["ID"]
+        value           = transaction["value"]
+        trs_category    = transaction["category"]
+        trs_date        = transaction["date"]
+        trs_description = transaction.get("description")
+
+        insert = (
+            "INSERT INTO transactions"
+            "(transactions_id, user_id, value, category, date, description) "
+            "VALUES (%s, %s, %s, %s, %s, %s)"
+        )
         cur.execute(insert, (trs_id, user_id, value, trs_category, trs_date, trs_description))
         conn.commit()
-        print("Successfully inserted transaction")
+        logger.info(f"Transação registrada: user={user_id} value={value} category={trs_category}")
+        return True
+
+    except KeyError as e:
+        logger.error(f"Campo obrigatório ausente na transação: {e}")
+        conn.rollback()
+        return False
+    except psycopg2.Error as e:
+        logger.error(f"Erro de banco em register_transaction(): {e}", exc_info=True)
+        conn.rollback()
+        return False
     except Exception as e:
-        print(f"Error: {e}")
-    pass
-
-def retorna_consulta(user_id):
-#def retorna_consulta(user_id, min_value, max_value, min_date, max_date, categories):
-    query = '''SELECT * FROM transactions WHERE'''
+        logger.error(f"Erro inesperado em register_transaction(): {e}", exc_info=True)
+        conn.rollback()
+        return False
 
 
-    min_value = None
-    max_value= None
-    min_date = None
-    max_date = None
-    categories = ["Mercado", "Contas", "Outros"]
-    conditions=[]
-    conditions.append("user_id = %s")
-    params=[]
-    params.append(user_id)
-    # Date range
-    if min_date is not None:
-        conditions.append("date >= %s")
-        params.append(min_date)
-    if max_date is not None:
-        conditions.append("date <= %s")
-        params.append(max_date)
+def consulta_ano_mes(user_id: int, ano: int, mes: int) -> io.BytesIO | None:
+    """
+    Gera gráfico de pizza com os gastos do usuário no período.
+    Retorna um buffer PNG em memória, ou None em caso de falha.
+    """
+    try:
+        sql_query = """
+            SELECT value, category
+            FROM transactions
+            WHERE user_id = %s
+              AND EXTRACT(YEAR  FROM date) = %s
+              AND EXTRACT(MONTH FROM date) = %s
+        """
+        params = [user_id, int(ano), int(mes)]
+        df = pd.io.sql.read_sql(sql_query, conn, params=params)
 
-    # Numeric range (price, score, etc.)
-    if min_value is not None:
-        conditions.append("value >= %s")
-        params.append(min_price)
-    if max_value is not None:
-        conditions.append("value <= %s")
-        params.append(max_price)
+        if df.empty:
+            logger.info(f"Nenhuma transação encontrada para user={user_id} {mes}/{ano}")
+            return None
 
-    # Categories
-    if categories is not None:
-        conditions.append("category in %s")
-        params.append(tuple(categories))
+        df_grouped = df.groupby("category", as_index=False)["value"].sum()
 
-    # Add other filters similarly...
-    # if some_text:
-    #     conditions.append("name ILIKE %s")
-    #     params.append(f"%{some_text}%")
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.pie(df_grouped["value"], labels=df_grouped["category"], autopct="%1.1f%%")
+        ax.set_title(f"Gastos em {months[int(mes) - 1]}/{ano}")
 
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+        lista_texto = "\n".join(
+            f"{cat}: R${val / 100:.2f}"
+            for cat, val in zip(df_grouped["category"], df_grouped["value"])
+        )
+        plt.figtext(0.5, -0.05, lista_texto, ha="center", va="top", fontsize=12)
+        plt.tight_layout()
 
-    print(query)
-    cur.execute(query, params)
-    results = cur.fetchall()
-    print(results)
-    return "test"
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        plt.close(fig)
 
-    '''
-    df = pd.read_sql(query, conn)
-    fig, ax = plt.subplots(figsize=(10,10))
-    ax.axis('off')
-    table = ax.table(cellText=df.values, colLabels=df.columns, loc='center')
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    table.scale(1.2, 1.2)
-    with PdfPages("transactions.pdf") as pdf:
-        pdf.savefig(fig)
-    plt.close(fig)
-    '''
-def consulta_ano_mes(user_id, ano, mes):
-    sql_query = """
-                SELECT value, category \
-                FROM transactions
-                WHERE user_id = %s \
-                  AND EXTRACT(YEAR FROM date) = %s \
-                  AND EXTRACT(MONTH FROM date) = %s; \
-                """
-    params = [user_id, int(ano), int(mes)]
-    print(params)
-    response = pd.io.sql.read_sql(sql_query, conn, params=params)
-    response = response.groupby("category", as_index=False)["value"].sum()
+        logger.info(f"Gráfico gerado para user={user_id} {mes}/{ano}")
+        return buf
 
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.pie(response["value"], labels=response["category"], autopct="%1.1f%%")
-    ax.set_title(f"Gastos em {months[int(mes)-1]}/{ano}")
-
-    # --- Criar a lista abaixo do gráfico ---
-    lista_texto = "\n".join(f"{cat}: R${val/100:.2f}" for cat, val in zip(response["category"], response["value"]))
-
-    # Inserir texto na imagem (abaixo do gráfico)
-    plt.figtext(
-        0.5, -0.05,
-        lista_texto,
-        ha="center", va="top", fontsize=12
-    )
-
-    # Ajustar layout para caber o texto
-    plt.tight_layout()
-
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight")
-    buf.seek(0)
-    plt.close(fig)
-
-
-
-    return buf
-
-'''
-# Execute a command: this creates a new table
-#cur.execute("CREATE TABLE test (id serial PRIMARY KEY, num integer, data varchar);")
-
-# Pass data to fill a query placeholders and let Psycopg perform
-# the correct conversion (no more SQL injections!)
-#cur.execute("INSERT INTO test (num, data) VALUES (%s, %s)",(100, "abc'def"))
-
-
-# Query the database and obtain data as Python objects
-cur.execute("SELECT * FROM test;")
-print(cur.fetchall())
-
-
-# Make the changes to the database persistent
-#conn.commit()
-
-# Close communication with the database
-cur.close()
-conn.close()
-'''
+    except psycopg2.Error as e:
+        logger.error(f"Erro de banco em consulta_ano_mes(): {e}", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error(f"Erro inesperado em consulta_ano_mes(): {e}", exc_info=True)
+        plt.close("all")  # garante fechamento mesmo em erro
+        return None
