@@ -211,6 +211,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_msg = (
+        "🤖 *LedgerBot — Comandos e Funcionalidades*\n\n"
+
+        "📥 *Registrar uma transação*\n"
+        "Envie uma mensagem descrevendo seu gasto em qualquer um dos formatos:\n"
+        "• *Texto:* \"Gastei 45 reais no mercado\"\n"
+        "• *Voz:* grave um áudio descrevendo o gasto\n"
+        "• *Foto:* tire uma foto do cupom fiscal ou da tela de pagamento\n\n"
+        "O bot vai extrair o valor e a categoria automaticamente e pedir sua confirmação.\n\n"
+
+        "✏️ *Confirmar ou editar uma transação*\n"
+        "Após enviar um gasto, você verá três opções:\n"
+        "• *Confirmar* — salva a transação\n"
+        "• *Editar* — corrige o valor ou a categoria antes de salvar\n"
+        "• *Cancelar* — descarta a transação\n\n"
+
+        "🗂️ *Categorias disponíveis*\n"
+        "Serviços · Viagens · Mercado · Restaurantes · Contas · Outros\n\n"
+
+        "📊 *Consultar gastos — /consulta*\n"
+        "Gera um gráfico de pizza com seus gastos agrupados por categoria.\n"
+        "Selecione o ano e o mês desejados nos menus que aparecerem.\n\n"
+
+        "❓ *Ajuda — /help*\n"
+        "Exibe esta mensagem.\n\n"
+
+        "💡 *Dica:* o bot entende linguagem natural — não precisa seguir um formato fixo!"
+    )
+    try:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=help_msg,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Erro em help_command(): {e}", exc_info=True)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Não foi possível exibir a ajuda. Tente novamente."
+        )
+
 async def consulta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await context.bot.send_message(
@@ -423,11 +465,13 @@ if __name__ == '__main__':
     application = ApplicationBuilder().token(api_token).build()
 
     application.add_handler(CommandHandler('start',    start))
+    application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('consulta', consulta))
     application.add_handler(MessageHandler(filters.TEXT,  handle_message))
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+
 
     print("Polling...")
     application.run_polling(poll_interval=3)
