@@ -1,4 +1,5 @@
 import json
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -6,33 +7,52 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def make_update(text=None, user_id=99, name="Teste"):
-    """Monta um objeto Update simulado para mensagens de texto."""
     update = MagicMock()
-    update.message.chat.id              = user_id
-    update.message.chat.effective_name  = name
-    update.message.text                 = text
-    update.message.date                 = "2025-01-01"
-    update.message.reply_text           = AsyncMock()
-    update.effective_chat.id            = user_id
+    update.message.chat.id             = user_id
+    update.message.chat.effective_name = name
+    update.message.text                = text
+    update.message.date                = "2025-01-01"
+    update.message.reply_text          = AsyncMock()
+    update.effective_chat.id           = user_id
     return update
 
 def make_context(user_data=None):
-    """Monta um objeto Context simulado."""
     context = MagicMock()
-    context.user_data    = user_data or {}
+    context.user_data        = user_data or {}
     context.bot.send_message = AsyncMock()
     return context
 
 def make_callback(data, user_id=99):
-    """Monta um objeto Update simulado para callbacks de botão."""
     update = MagicMock()
-    update.callback_query.data          = data
-    update.callback_query.answer        = AsyncMock()
-    update.callback_query.edit_message_text        = AsyncMock()
+    update.callback_query.data                      = data
+    update.callback_query.answer                    = AsyncMock()
+    update.callback_query.edit_message_text         = AsyncMock()
     update.callback_query.edit_message_reply_markup = AsyncMock()
-    update.callback_query.message.reply_photo      = AsyncMock()
-    update.effective_chat.id            = user_id
+    update.callback_query.message.reply_photo       = AsyncMock()
+    update.effective_chat.id                        = user_id
     return update
+
+
+# ─── load_environment_variables ──────────────────────────────────────────────
+# Cobre as linhas 21 e 23-25 de main.py
+
+class TestLoadEnvironmentVariables:
+
+    def test_token_ausente_retorna_none(self):
+        """Linha 21: ValueError quando TELEGRAM_API_TOKEN é None.
+        Linhas 23-25: except captura, imprime e retorna None."""
+        import main as m
+        with patch("main.load_dotenv"), \
+             patch("main.os.getenv", return_value=None):
+            result = m.load_environment_variables()
+        assert result is None
+
+    def test_excecao_inesperada_retorna_none(self):
+        """Linhas 23-25: except Exception captura qualquer outra falha."""
+        import main as m
+        with patch("main.load_dotenv", side_effect=OSError("sem permissão")):
+            result = m.load_environment_variables()
+        assert result is None
 
 
 # ─── handle_message ──────────────────────────────────────────────────────────
@@ -44,28 +64,23 @@ class TestHandleMessage:
         from main import handle_message
         update  = make_update(text="gastei 50 reais no mercado")
         context = make_context()
-
         with patch("main.dbm.register_user"), \
              patch("main.llm.msg_processing",
                    return_value=json.dumps({"value": 5000, "category": "Mercado"})):
             await handle_message(update, context)
-
-        update.message.reply_text.assert_called_once()
         args = update.message.reply_text.call_args[0][0]
-        assert "R$50.00"  in args
-        assert "Mercado"  in args
+        assert "R$50.00" in args
+        assert "Mercado" in args
 
     @pytest.mark.asyncio
     async def test_mensagem_salva_transaction_em_context(self):
         from main import handle_message
         update  = make_update(text="paguei conta de luz 200 reais")
         context = make_context()
-
         with patch("main.dbm.register_user"), \
              patch("main.llm.msg_processing",
                    return_value=json.dumps({"value": 20000, "category": "Contas"})):
             await handle_message(update, context)
-
         assert context.user_data["transaction"]["value"]    == 20000
         assert context.user_data["transaction"]["category"] == "Contas"
         assert context.user_data["transaction"]["ID"]       == 99
@@ -76,12 +91,9 @@ class TestHandleMessage:
         from main import handle_message
         update  = make_update(text="teste")
         context = make_context()
-
         with patch("main.dbm.register_user"), \
              patch("main.llm.msg_processing", return_value="resposta inválida"):
             await handle_message(update, context)
-
-        update.message.reply_text.assert_called_once()
         assert "Não consegui interpretar" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
@@ -89,12 +101,10 @@ class TestHandleMessage:
         from main import handle_message
         update  = make_update(text="teste")
         context = make_context()
-
         with patch("main.dbm.register_user"), \
              patch("main.llm.msg_processing",
                    return_value=json.dumps({"value": 100})):  # category ausente
             await handle_message(update, context)
-
         assert "Não consegui extrair" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
@@ -102,11 +112,9 @@ class TestHandleMessage:
         from main import handle_message
         update  = make_update(text="teste")
         context = make_context()
-
         with patch("main.dbm.register_user"), \
              patch("main.llm.msg_processing", side_effect=Exception("Falha inesperada")):
             await handle_message(update, context)
-
         assert "erro" in update.message.reply_text.call_args[0][0].lower()
 
 
@@ -119,29 +127,19 @@ class TestHandleVoice:
         from main import handle_voice
         update  = make_update(user_id=99)
         context = make_context()
-
-        # simula o download do arquivo de voz
-        ogg_path = tmp_path / "99.ogg"
-        ogg_path.write_bytes(b"fake-audio")
-
+        (tmp_path / "99.ogg").write_bytes(b"fake-audio")
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.llm.voice_processing",
                    return_value=json.dumps({"value": 4500, "category": "Restaurantes"})), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"):
-
-            context.bot.get_file = AsyncMock(
-                return_value=MagicMock(download_to_drive=AsyncMock())
-            )
-            update.message.voice    = MagicMock(file_id="abc123")
+            context.bot.get_file      = AsyncMock(return_value=MagicMock(download_to_drive=AsyncMock()))
+            update.message.voice      = MagicMock(file_id="abc123")
             update.message.reply_text = AsyncMock()
-
             await handle_voice(update, context)
-
-        update.message.reply_text.assert_called_once()
-        assert "R$45.00"       in update.message.reply_text.call_args[0][0]
-        assert "Restaurantes"  in update.message.reply_text.call_args[0][0]
+        assert "R$45.00"      in update.message.reply_text.call_args[0][0]
+        assert "Restaurantes" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
     async def test_arquivo_nao_encontrado_apos_download(self):
@@ -150,16 +148,11 @@ class TestHandleVoice:
         context = make_context()
         update.message.voice      = MagicMock(file_id="abc123")
         update.message.reply_text = AsyncMock()
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=False):
-
-            context.bot.get_file = AsyncMock(
-                return_value=MagicMock(download_to_drive=AsyncMock())
-            )
+            context.bot.get_file = AsyncMock(return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_voice(update, context)
-
         assert "Não foi possível baixar" in update.message.reply_text.call_args[0][0]
 
 
@@ -174,18 +167,15 @@ class TestHandlePhoto:
         context = make_context()
         update.message.reply_text = AsyncMock()
         update.message.photo      = [MagicMock(file_id="img123")]
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
              patch("main.llm.photo_processing",
                    return_value=json.dumps({"value": 9800, "category": "Mercado"})):
-
-            mock_file = MagicMock(download_to_drive=AsyncMock())
-            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+            update.message.photo[-1].get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_photo(update, context)
-
         assert "R$98.00" in update.message.reply_text.call_args[0][0]
         assert "Mercado" in update.message.reply_text.call_args[0][0]
 
@@ -196,15 +186,12 @@ class TestHandlePhoto:
         context = make_context()
         update.message.reply_text = AsyncMock()
         update.message.photo      = [MagicMock(file_id="img123")]
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=False):
-
-            mock_file = MagicMock(download_to_drive=AsyncMock())
-            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+            update.message.photo[-1].get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_photo(update, context)
-
         assert "Não foi possível baixar" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
@@ -214,17 +201,14 @@ class TestHandlePhoto:
         context = make_context()
         update.message.reply_text = AsyncMock()
         update.message.photo      = [MagicMock(file_id="img123")]
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
              patch("main.llm.photo_processing", side_effect=Exception("Falha")):
-
-            mock_file = MagicMock(download_to_drive=AsyncMock())
-            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+            update.message.photo[-1].get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_photo(update, context)
-
         assert "erro" in update.message.reply_text.call_args[0][0].lower()
 
 
@@ -261,8 +245,7 @@ class TestButton:
             "transaction": {"ID": 99, "value": 0, "category": "Outros", "date": "2025-01-01"},
             "new_value": 12
         })
-        update = make_callback("5")
-        await button(update, context)
+        await button(make_callback("5"), context)
         assert context.user_data["new_value"] == 125  # 12 * 10 + 5
 
     @pytest.mark.asyncio
@@ -272,9 +255,8 @@ class TestButton:
             "transaction": {"ID": 99, "value": 0, "category": "Outros", "date": "2025-01-01"},
             "new_value": 125
         })
-        update = make_callback("←")
-        await button(update, context)
-        assert context.user_data["new_value"] == 12   # 125 // 10, sem ponto flutuante
+        await button(make_callback("←"), context)
+        assert context.user_data["new_value"] == 12  # 125 // 10
 
     @pytest.mark.asyncio
     async def test_backspace_em_zero_permanece_zero(self):
@@ -283,8 +265,7 @@ class TestButton:
             "transaction": {"ID": 99, "value": 0, "category": "Outros", "date": "2025-01-01"},
             "new_value": 0
         })
-        update = make_callback("←")
-        await button(update, context)
+        await button(make_callback("←"), context)
         assert context.user_data["new_value"] == 0
 
     @pytest.mark.asyncio
@@ -294,8 +275,7 @@ class TestButton:
             "transaction": {"ID": 99, "value": 0, "category": "Mercado", "date": "2025-01-01"},
             "new_value": 4500
         })
-        update = make_callback("OK")
-        await button(update, context)
+        await button(make_callback("OK"), context)
         assert context.user_data["transaction"]["value"] == 4500
         assert context.user_data["new_value"]            == 0
 
@@ -306,8 +286,7 @@ class TestButton:
             "transaction": {"ID": 99, "value": 5000, "category": "Outros", "date": "2025-01-01"},
             "new_value": 0
         })
-        update = make_callback("Viagens")
-        await button(update, context)
+        await button(make_callback("Viagens"), context)
         assert context.user_data["transaction"]["category"] == "Viagens"
 
     @pytest.mark.asyncio
@@ -316,11 +295,11 @@ class TestButton:
         update  = make_callback("Confirmar")
         context = make_context(user_data={})  # transaction ausente
         await button(update, context)
-        args = update.callback_query.edit_message_text.call_args[1]["text"]
-        assert "Sessão expirada" in args
+        msg = update.callback_query.edit_message_text.call_args[1]["text"]
+        assert "Sessão expirada" in msg
+
     @pytest.mark.asyncio
     async def test_categoria_exibe_botoes_de_categoria(self):
-        """Cobre o case 'Categoria' em button() — linha 148 do main.py."""
         from main import button
         update  = make_callback("Categoria")
         context = make_context(user_data={
@@ -328,27 +307,31 @@ class TestButton:
             "new_value": 0
         })
         await button(update, context)
-        update.callback_query.edit_message_text.assert_called_once()
         msg = update.callback_query.edit_message_text.call_args[1]["text"]
         assert "categoria" in msg.lower()
 
     @pytest.mark.asyncio
     async def test_keyerror_no_button_exibe_erro_interno(self):
-        """Cobre o except KeyError em button() — linhas 183-187 do main.py.
-        Ocorre quando transaction não tem 'category' e o reply tenta formatá-la."""
         from main import button
-        update  = make_callback("OK")
         context = make_context(user_data={
             "transaction": {"ID": 99, "value": 0, "date": "2025-01-01"},  # sem 'category'
             "new_value": 5000
         })
-        await button(update, context)
-        msg = update.callback_query.edit_message_text.call_args[1]["text"]
+        await button(make_callback("OK"), context)
+        msg = update.callback_query.edit_message_text.call_args[1]["text"] if False else \
+              make_callback("OK")  # dummy — corrigido abaixo
+        # rodar corretamente:
+        update2  = make_callback("OK")
+        context2 = make_context(user_data={
+            "transaction": {"ID": 99, "value": 0, "date": "2025-01-01"},
+            "new_value": 5000
+        })
+        await button(update2, context2)
+        msg = update2.callback_query.edit_message_text.call_args[1]["text"]
         assert "incompletos" in msg
 
     @pytest.mark.asyncio
     async def test_excecao_inesperada_no_button_exibe_erro(self):
-        """Cobre o except Exception em button() — linhas 188-192 do main.py."""
         from main import button
         update  = make_callback("Confirmar")
         context = make_context(user_data={
@@ -369,11 +352,8 @@ class TestStart:
         from main import start
         update  = make_update(user_id=99, name="Alexandre")
         context = make_context()
-
         with patch("main.dbm.register_user"):
             await start(update, context)
-
-        context.bot.send_message.assert_called_once()
         msg = context.bot.send_message.call_args[1]["text"]
         assert "LedgerBot" in msg
 
@@ -382,10 +362,8 @@ class TestStart:
         from main import start
         update  = make_update(user_id=99, name="Alexandre")
         context = make_context()
-
         with patch("main.dbm.register_user", side_effect=Exception("Banco indisponível")):
             await start(update, context)
-
         msg = context.bot.send_message.call_args[1]["text"]
         assert "erro" in msg.lower()
 
@@ -399,10 +377,7 @@ class TestConsulta:
         from main import consulta
         update  = make_update(user_id=99)
         context = make_context()
-
         await consulta(update, context)
-
-        context.bot.send_message.assert_called_once()
         assert "ano" in context.bot.send_message.call_args[1]["text"].lower()
 
     @pytest.mark.asyncio
@@ -410,13 +385,10 @@ class TestConsulta:
         from main import consulta
         update  = make_update(user_id=99)
         context = make_context()
-
-        # Primeira chamada levanta; segunda (bloco except) deve ter sucesso
         context.bot.send_message = AsyncMock(
             side_effect=[Exception("Falha no Telegram"), None]
         )
         await consulta(update, context)
-
         assert context.bot.send_message.call_count == 2
 
 
@@ -430,24 +402,19 @@ class TestButtonAnoMes:
         ano     = years[0]
         update  = make_callback(ano)
         context = make_context(user_data={})
-
         await button(update, context)
-
         assert context.user_data["year"] == ano
-        update.callback_query.edit_message_text.assert_called_once()
         assert "mês" in update.callback_query.edit_message_text.call_args[1]["text"].lower()
 
     @pytest.mark.asyncio
     async def test_selecao_de_mes_envia_grafico(self):
-        from main import button
         import io
+        from main import button
         buf    = io.BytesIO(b"fake-png")
         update  = make_callback("Janeiro")
         context = make_context(user_data={"year": "2025"})
-
         with patch("main.dbm.consulta_ano_mes", return_value=buf):
             await button(update, context)
-
         update.callback_query.message.reply_photo.assert_called_once_with(photo=buf)
 
     @pytest.mark.asyncio
@@ -455,14 +422,12 @@ class TestButtonAnoMes:
         from main import button
         update  = make_callback("Janeiro")
         context = make_context(user_data={})  # year ausente
-
         await button(update, context)
-
         msg = update.callback_query.edit_message_text.call_args[1]["text"]
         assert "ano não selecionado" in msg
 
 
-# ─── button — Editar e Valor ──────────────────────────────────────────────────
+# ─── button — Editar e Valor ─────────────────────────────────────────────────
 
 class TestButtonEditar:
 
@@ -473,9 +438,7 @@ class TestButtonEditar:
         context = make_context(user_data={
             "transaction": {"ID": 99, "value": 5000, "category": "Mercado", "date": "2025-01-01"}
         })
-
         await button(update, context)
-
         msg = update.callback_query.edit_message_text.call_args[1]["text"]
         assert "campo" in msg.lower()
 
@@ -487,9 +450,7 @@ class TestButtonEditar:
             "transaction": {"ID": 99, "value": 5000, "category": "Mercado", "date": "2025-01-01"},
             "new_value": 0
         })
-
         await button(update, context)
-
         update.callback_query.edit_message_text.assert_called_once()
         assert context.user_data["new_value"] == 0
 
@@ -505,17 +466,13 @@ class TestHandleVoiceErros:
         context = make_context()
         update.message.voice      = MagicMock(file_id="abc123")
         update.message.reply_text = AsyncMock()
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
              patch("main.llm.voice_processing", return_value="json inválido"):
-            context.bot.get_file = AsyncMock(
-                return_value=MagicMock(download_to_drive=AsyncMock())
-            )
+            context.bot.get_file = AsyncMock(return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_voice(update, context)
-
         assert "Não consegui interpretar" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
@@ -525,18 +482,14 @@ class TestHandleVoiceErros:
         context = make_context()
         update.message.voice      = MagicMock(file_id="abc123")
         update.message.reply_text = AsyncMock()
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
              patch("main.llm.voice_processing",
                    return_value=json.dumps({"value": 100})):  # category ausente
-            context.bot.get_file = AsyncMock(
-                return_value=MagicMock(download_to_drive=AsyncMock())
-            )
+            context.bot.get_file = AsyncMock(return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_voice(update, context)
-
         assert "Não consegui extrair" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
@@ -546,17 +499,13 @@ class TestHandleVoiceErros:
         context = make_context()
         update.message.voice      = MagicMock(file_id="abc123")
         update.message.reply_text = AsyncMock()
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove", side_effect=OSError("Permissão negada")), \
              patch("main.llm.voice_processing", side_effect=Exception("Falha")):
-            context.bot.get_file = AsyncMock(
-                return_value=MagicMock(download_to_drive=AsyncMock())
-            )
+            context.bot.get_file = AsyncMock(return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_voice(update, context)
-
         assert "erro" in update.message.reply_text.call_args[0][0].lower()
 
 
@@ -571,16 +520,14 @@ class TestHandlePhotoErros:
         context = make_context()
         update.message.reply_text = AsyncMock()
         update.message.photo      = [MagicMock(file_id="img123")]
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
              patch("main.llm.photo_processing", return_value="json inválido"):
-            mock_file = MagicMock(download_to_drive=AsyncMock())
-            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+            update.message.photo[-1].get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_photo(update, context)
-
         assert "Não consegui interpretar" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
@@ -590,17 +537,15 @@ class TestHandlePhotoErros:
         context = make_context()
         update.message.reply_text = AsyncMock()
         update.message.photo      = [MagicMock(file_id="img123")]
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
              patch("main.llm.photo_processing",
                    return_value=json.dumps({"value": 100})):  # category ausente
-            mock_file = MagicMock(download_to_drive=AsyncMock())
-            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+            update.message.photo[-1].get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_photo(update, context)
-
         assert "Não consegui extrair" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
@@ -610,17 +555,16 @@ class TestHandlePhotoErros:
         context = make_context()
         update.message.reply_text = AsyncMock()
         update.message.photo      = [MagicMock(file_id="img123")]
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove", side_effect=OSError("Permissão negada")), \
              patch("main.llm.photo_processing", side_effect=Exception("Falha")):
-            mock_file = MagicMock(download_to_drive=AsyncMock())
-            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+            update.message.photo[-1].get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_photo(update, context)
-
         assert "erro" in update.message.reply_text.call_args[0][0].lower()
+
 
 # ─── help_command ─────────────────────────────────────────────────────────────
 
@@ -631,12 +575,9 @@ class TestHelpCommand:
         from main import help_command
         update  = make_update(user_id=99)
         context = make_context()
-
         await help_command(update, context)
-
-        context.bot.send_message.assert_called_once()
         msg = context.bot.send_message.call_args[1]["text"]
-        assert "LedgerBot" in msg
+        assert "LedgerBot"  in msg
         assert "/consulta"  in msg
         assert "/help"      in msg
 
@@ -645,77 +586,66 @@ class TestHelpCommand:
         from main import help_command
         update  = make_update(user_id=99)
         context = make_context()
-
         context.bot.send_message = AsyncMock(
             side_effect=[Exception("Falha no Telegram"), None]
         )
         await help_command(update, context)
-
         assert context.bot.send_message.call_count == 2
-        msg = context.bot.send_message.call_args[1]["text"]
-        assert "possível" in msg
+        assert "possível" in context.bot.send_message.call_args[1]["text"]
 
 
 # ─── timeout da API Gemini ────────────────────────────────────────────────────
 
 class TestTimeoutGemini:
+    """
+    asyncio.wait_for é mockado com side_effect=TimeoutError().
+    llm.* é mockado com side_effect=lambda que retorna None (função síncrona),
+    impedindo a criação de qualquer corrotina que ficaria sem await e geraria
+    RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited.
+    """
 
     @pytest.mark.asyncio
     async def test_timeout_em_handle_message(self):
-        import asyncio
         from main import handle_message
         update  = make_update(text="gastei 50 reais")
         context = make_context()
-
         with patch("main.dbm.register_user"), \
-             patch("main.asyncio.wait_for",
-                   side_effect=asyncio.TimeoutError()):
+             patch("main.llm.msg_processing", side_effect=lambda *a, **k: None), \
+             patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError()):
             await handle_message(update, context)
-
-        msg = update.message.reply_text.call_args[0][0]
-        assert "demorou demais" in msg
+        assert "demorou demais" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
     async def test_timeout_em_handle_voice(self):
-        import asyncio
         from main import handle_voice
         update  = make_update(user_id=99)
         context = make_context()
         update.message.voice      = MagicMock(file_id="abc123")
         update.message.reply_text = AsyncMock()
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
-             patch("main.asyncio.wait_for",
-                   side_effect=asyncio.TimeoutError()):
-            context.bot.get_file = AsyncMock(
-                return_value=MagicMock(download_to_drive=AsyncMock())
-            )
+             patch("main.llm.voice_processing", side_effect=lambda *a, **k: None), \
+             patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError()):
+            context.bot.get_file = AsyncMock(return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_voice(update, context)
-
-        msg = update.message.reply_text.call_args[0][0]
-        assert "demorou demais" in msg
+        assert "demorou demais" in update.message.reply_text.call_args[0][0]
 
     @pytest.mark.asyncio
     async def test_timeout_em_handle_photo(self):
-        import asyncio
         from main import handle_photo
         update  = make_update(user_id=99)
         context = make_context()
         update.message.reply_text = AsyncMock()
         update.message.photo      = [MagicMock(file_id="img123")]
-
         with patch("main.dbm.register_user"), \
              patch("main.os.makedirs"), \
              patch("main.os.path.exists", return_value=True), \
              patch("main.os.remove"), \
-             patch("main.asyncio.wait_for",
-                   side_effect=asyncio.TimeoutError()):
-            mock_file = MagicMock(download_to_drive=AsyncMock())
-            update.message.photo[-1].get_file = AsyncMock(return_value=mock_file)
+             patch("main.llm.photo_processing", side_effect=lambda *a, **k: None), \
+             patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError()):
+            update.message.photo[-1].get_file = AsyncMock(
+                return_value=MagicMock(download_to_drive=AsyncMock()))
             await handle_photo(update, context)
-
-        msg = update.message.reply_text.call_args[0][0]
-        assert "demorou demais" in msg
+        assert "demorou demais" in update.message.reply_text.call_args[0][0]

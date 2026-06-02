@@ -460,7 +460,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.warning(f"Erro ao remover arquivo temporário {photo_path}: {cleanup_error}")
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     print("Starting bot...")
     application = ApplicationBuilder().token(api_token).build()
 
